@@ -1,0 +1,5 @@
+flask
+onnxruntime
+flask_cors
+pillow
+gunicorn
