@@ -69,6 +69,7 @@ def predict():
 
     return jsonify(result_class=result_class, result_dict=sorted_result_dict)
 
+#l
 
 if __name__ == '__main__':
     app.run()
