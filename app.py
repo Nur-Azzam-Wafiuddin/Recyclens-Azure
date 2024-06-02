@@ -4,16 +4,14 @@ import onnxruntime as ort
 from flask_cors import CORS
 from PIL import Image
 
-
 CLASS_NAME = ['Aluminium', 'Carton', 'E-waste', 'Glass', 'Organic_Waste', 'Paper_and_Cardboard', 'Plastics', 'Textiles', 'Wood']
 
 app = Flask(__name__)
-CORS(app) 
+CORS(app)
 
 # Build Model
 model_path = './model4_resnet.onnx'
 ort_session = ort.InferenceSession(model_path)
-
 
 # Define a route for the GET request
 @app.route('/', methods=['GET'])
@@ -21,6 +19,8 @@ def home():
     return render_template('home.html')
 
 def preprocess_image(img):
+    if img.mode == 'RGBA':
+        img = img.convert('RGB')
     # Resize and Center Crop
     img_np = np.array(img.resize((224, 224)))  # Resize
     h, w = img_np.shape[:2]
@@ -55,19 +55,27 @@ def predict():
     outputs = ort_session.run(None, {input_name: input_image})
     predictions = outputs[0]
 
-    # Prediction Label
-    predicted_class_index = np.argmax(predictions, axis=1)[0]
-    predicted_class_name = CLASS_NAME[predicted_class_index]
-
+    # Get class probabilities using softmax
     softmax_output = np.exp(predictions) / np.sum(np.exp(predictions), axis=1, keepdims=True)
-    result_dict = {CLASS_NAME[i]: float(prob) for i, prob in enumerate(softmax_output[0])}
+    probabilities = softmax_output[0]
 
-    # Sort result_dict by probabilities in descending order
-    sorted_result_dict = dict(sorted(result_dict.items(), key=lambda item: item[1], reverse=True))
+    # Get the index of the highest probability
+    class_index = np.argmax(probabilities)
 
-    result_class = (predicted_class_name, sorted_result_dict[predicted_class_name])
+    # Get the predicted class and probability
+    predicted_class = CLASS_NAME[class_index]
+    probability = probabilities[class_index]
 
-    return jsonify(result_class=result_class, result_dict=sorted_result_dict)
+    # Sort class probabilities in descending order
+    class_probs = list(zip(CLASS_NAME, probabilities))
+    class_probs.sort(key=lambda x: x[1], reverse=True)
+
+    # Return JSON response
+    return jsonify({
+        'predicted_class': predicted_class,
+        'probability': float(probability),
+        'class_probs': [(class_name, float(prob)) for class_name, prob in class_probs]
+    })
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True, host='0.0.0.0')
